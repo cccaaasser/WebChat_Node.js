@@ -60,7 +60,7 @@
             }
         }
         // Connect to socket.io
-        var socket = io.connect('http://newwebchat.azurewebsites.net');
+        var socket = io.connect('window.location.hostname');
         // Check for connection
         if(socket !== undefined){
             console.log('Connected to socket...');
