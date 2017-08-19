@@ -1,63 +1,44 @@
-const mongo = require('mongodb').MongoClient;
-const client = require('socket.io').listen(80).sockets;
+var express = require('express');
+var app = express();
+var server = require('http').createServer(app);
+var io = require('socket.io').listen(server);
 
-// Connect to mongo
-mongo.connect('mongodb://127.0.0.1/chat', function(err, db){
-    if(err){
-        throw err;
-    }
+users = [];
+connections = [];
 
-    console.log('MongoDB connected...');
+server.listen(process.env.PORT || 4000);
+console.log('Server running...');
 
-    // Connect to Socket.io
-    client.on('connection', function(socket){
-        var chat = db.collection('chats');
+app.get('/', function (req, res) {
+    res.sendFile(__dirname + '/index.html');
+});
 
-        // Create function to send status
-        sendStatus = function(s){
-            socket.emit('status', s);
-        };
+io.sockets.on('connection', function (socket) {
+  connections.push(socket);
+  console.log('Connected: %s sockets connected',connections.length );
 
-        // Get chats from mongo collection
-        chat.find().limit(100).sort({_id:1}).toArray(function(err, res){
-            if(err){
-                throw err;
-            }
-
-            // Emit the messages
-            socket.emit('output', res);
-        });
-
-        // Handle input events
-        socket.on('input', function(data){
-            var name = data.name;
-            var message = data.message;
-
-            // Check for name and message
-            if(name == '' || message == ''){
-                // Send error status
-                sendStatus('Please enter a name and message');
-            } else {
-                // Insert message
-                chat.insert({name: name, message: message}, function(){
-                    client.emit('output', [data]);
-
-                    // Send status object
-                    sendStatus({
-                        message: 'Message sent',
-                        clear: true
-                    });
-                });
-            }
-        });
-
-        // Handle clear
-        socket.on('clear', function(data){
-            // Remove all chats from collection
-            chat.remove({}, function(){
-                // Emit cleared
-                socket.emit('cleared');
-            });
-        });
+  //Disconnect
+    socket.on('disconnect', function (data) {
+        users.splice(users.indexOf(socket.username), 1);
+        updateUsernames();
+        connections.splice(connections.indexOf(socket), 1);
+        console.log('Disconnected: %s sockets connected', connections.length);
     });
+
+    //Send Message
+    socket.on('send message', function (data) {
+       io.sockets.emit('new message', {msg: data, user: socket.username});
+    });
+    
+    //New User
+    socket.on('new user', function (data, callback) {
+        callback(true);
+        socket.username = data;
+        users.push(socket.username);
+        updateUsernames();
+    });
+    
+    function updateUsernames() {
+        io.sockets.emit('get users', users);
+    }
 });
